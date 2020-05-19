@@ -1,0 +1,218 @@
+---
+title: "Comparison of Abeta and 3d6 treatments"
+author: "Mark Ziemann (m.ziemann@deakin.edu.au)"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+theme: cosmo
+---
+
+## Introduction
+
+I don't have a lot of background information on this project, but the idea is to compare 
+two different treatments (i) ctrl vs Abeta against (ii) ctrl vs 3d6.
+
+The data have been mapped with Salmon to the mouse transcriptome version 99 from Ensembl.
+So the comparison will be valid.
+
+The goal is to compare the two contrasts with respect to overall gene expression patterns
+and pathway analysis. To do that, I will do the following:
+
+1. Aggregate Salmon transcript cound to gene level counts.
+
+2. Perform differential expression analysis with DESeq2.
+
+3. Perform multidimensional gene set enrichment analysis with mitch. Gene sets will be
+obtained from Reactome.
+
+## Load some packages
+```{r,packages}
+suppressPackageStartupMessages({
+    library("DESeq2")
+    library("mitch")
+})
+```
+
+## Load in transcript counts
+Because R disallows object names starting with numerals I will call it "d36".
+
+``{r,load_data}
+ab <- read.table("provided/allSalmonQuant_Scr_vs_Abeta.csv",row.names=1,
+    sep=",",header=TRUE)
+
+d36 <- read.table("provided/3D6_study_gene_counts.csv",row.names=1,
+    sep=",",header=TRUE)
+
+```
+
+## Aggregate to gene level quant
+
+Because ultimately we want to perform gene set enrichment analysis, we will aggregate 
+transcript level counts to gene level. To do this we need the gene accession numbers
+and gene symbols too.
+
+I will also use this opportunity to round off the number to integers for DESeq2.
+
+```{r,gnames}
+gn <- read.table("ref/Mus_musculus.GRCm38.99.genenames.tsv",row.names=1)
+
+ab_gn <- merge(ab,gn,by=0)
+rownames(ab_gn) <- ab_gn$Row.names
+ab_gn$Row.names=NULL
+ab_gn_agg <- aggregate(. ~ V2, ab_gn, sum) 
+rownames(ab_gn_agg) <- ab_gn_agg$V2
+ab_gn_agg$V2 = NULL
+ab_gn_agg <- round(ab_gn_agg)
+head(ab_gn_agg)
+
+d36_gn <- merge(d36,gn,by=0)
+rownames(d36_gn) <- d36_gn$Row.names
+d36_gn$Row.names=NULL
+d36_gn_agg <- aggregate(. ~ V2, d36_gn, sum)
+rownames(d36_gn_agg) <- d36_gn_agg$V2
+d36_gn_agg$V2 = NULL
+d36_gn_agg <- round(d36_gn_agg)
+head(d36_gn_agg)
+
+# now lets look at the size of these tables to make sure we haven't lost a 
+# bunch of genes
+dim(ab)
+dim(ab_gn)
+dim(ab_gn_agg)
+
+dim(d36)
+dim(d36_gn)
+dim(d36_gn_agg)
+
+```
+
+## Perform Differential analysis
+
+First I'll run an MDS analysis to have a look at the total variation between datasets
+in this project.
+
+```{r,mds}
+
+x<-cbind(ab_gn_agg,d36_gn_agg)
+
+plot( cmdscale(dist(t(x))), xlab="Coordinate 1", ylab="Coordinate 2", type = "n",
+    main="MDS plot")
+
+text(cmdscale(dist(t(x))), labels=colnames(x), ) 
+
+```
+
+Next, prepare the sampesheet.
+
+```{r,ss}
+# setting up the samplesheet (ss)
+ab_ss <- as.data.frame( colnames(ab_gn_agg))
+ab_ss$ab <- as.numeric(grepl("^Abeta",ab_ss[,1]))
+rownames(ab_ss) <- ab_ss[,1]
+ab_ss[,1]=NULL
+
+d36_ss <- as.data.frame( colnames(d36_gn_agg))
+d36_ss$d36 <- as.numeric(grepl("^X3D6_",d36_ss[,1]))
+rownames(d36_ss) <- d36_ss[,1]
+d36_ss[,1]=NULL
+
+```
+
+Here I'm removing genes with average detection < 10 tags.
+We can see that the number of genes included is cut down quite a bit.
+
+```{r,flt}
+ab_gn_agg_f <- ab_gn_agg[which(rowMeans(ab_gn_agg)>10),]
+dim(ab_gn_agg_f)
+
+d36_gn_agg_f <- d36_gn_agg[which(rowMeans(d36_gn_agg)>10),]
+dim(d36_gn_agg_f)
+
+```
+
+Now run DESeq2.
+
+```{r,deseq}
+# ab
+dds <- DESeqDataSetFromMatrix(countData = ab_gn_agg_f ,
+    colData = ab_ss,
+    design = ~ ab )
+res <- DESeq(dds)
+z<- results(res)
+vsd <- vst(dds, blind=FALSE)
+zz <- cbind(as.data.frame(z),assay(vsd))
+ab_de <- zz[order(zz$pvalue),]
+
+# d36
+dds <- DESeqDataSetFromMatrix(countData = d36_gn_agg_f , 
+    colData = d36_ss,
+    design = ~ d36 )
+res <- DESeq(dds)
+z<- results(res)
+vsd <- vst(dds, blind=FALSE)
+zz <- cbind(as.data.frame(z),assay(vsd))
+d36_de <- zz[order(zz$pvalue),]
+
+```
+
+Now have a look at the top significant results.
+
+It looks like the Ctrl Vs ABeta has several DEGs as compared to 3D6 which has none. Still,
+there may be interesting clues in the gene expression data when we look at the pathway level
+enrichment.
+
+```{r,toptable}
+# ab
+head(ab_de)
+sig <- subset(ab_de,padj<0.05)
+# ab up
+nrow(subset(sig,log2FoldChange>0))
+# ab dn
+nrow(subset(sig,log2FoldChange<0))
+
+# d36
+head(d36_de)
+sig <- subset(d36_de,padj<0.05)
+# d36 up
+nrow(subset(sig,log2FoldChange>0))
+# d36 dn
+nrow(subset(sig,log2FoldChange<0))
+
+```
+
+## Multidimensional gene set analysis
+Here I am using the mitch package to perform multidimensional enrichment analysis with 
+Reactome pathways downloaded 19th May 2020. Gene sets were converted using a script
+I created earlier 
+(link [here](http://genomespot.blogspot.com/2016/12/msigdb-gene-sets-for-mouse.html)).
+
+
+```{r,get_reactome}
+genesets<-gmt_import("gsets/ReactomePathways_mouse.gmt")
+```
+
+Now import the data with mitch and perform the analysis.
+
+```{r,mitch}
+x <- list("ab"=ab_de,"d36"=d36_de)
+y <- mitch_import(x,"deseq2")
+head(y)
+gt <- as.data.frame(rownames(y))
+gt$gn <- sapply( strsplit(gt[,1],"_") ,"[[",2)
+colnames(gt) <- c("Gene_ID","Symbol")
+y <- mitch_import(x,"deseq2",geneTable=gt)
+res<-mitch_calc(y,genesets,priority="significance",cores=8)
+unlink("2danalysis.html")
+options(bitmapType="cairo")
+mitch_report(res,outfile="2danalysis.html")
+mitch_plots(res,outfile="2danalysis.pdf")
+```
+The results of the 2D analysis will be found in the HTML and PDF files generated here.
+
+# My session info
+This helps for reproducibility.
+
+``{r,sessioninfo}
+sessionInfo()
+```
