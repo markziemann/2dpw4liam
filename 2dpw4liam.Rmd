@@ -32,12 +32,13 @@ suppressPackageStartupMessages({
     library("DESeq2")
     library("mitch")
 })
+options(bitmapType="cairo")
 ```
 
 ## Load in transcript counts
 Because R disallows object names starting with numerals I will call it "d36".
 
-``{r,load_data}
+```{r,load_data}
 ab <- read.table("provided/allSalmonQuant_Scr_vs_Abeta.csv",row.names=1,
     sep=",",header=TRUE)
 
@@ -133,7 +134,7 @@ dim(d36_gn_agg_f)
 
 Now run DESeq2.
 
-```{r,deseq}
+```{r,deseq,message=FALSE}
 # ab
 dds <- DESeqDataSetFromMatrix(countData = ab_gn_agg_f ,
     colData = ab_ss,
@@ -192,9 +193,11 @@ I created earlier
 genesets<-gmt_import("gsets/ReactomePathways_mouse.gmt")
 ```
 
-Now import the data with mitch and perform the analysis.
+Now import the data with mitch and perform the analysis. Note that I have prioritised
+results based on the enrichment score (ES) which will highlight large effect sizes.
+Some of the results may not be statistically significant with this approach.
 
-```{r,mitch}
+```{r,mitch,message=FALSE,results=FALSE}
 x <- list("ab"=ab_de,"d36"=d36_de)
 y <- mitch_import(x,"deseq2")
 head(y)
@@ -202,17 +205,35 @@ gt <- as.data.frame(rownames(y))
 gt$gn <- sapply( strsplit(gt[,1],"_") ,"[[",2)
 colnames(gt) <- c("Gene_ID","Symbol")
 y <- mitch_import(x,"deseq2",geneTable=gt)
-res<-mitch_calc(y,genesets,priority="significance",cores=8)
+res<-mitch_calc(y,genesets,priority="effect",cores=8)
 unlink("2danalysis.html")
-options(bitmapType="cairo")
 mitch_report(res,outfile="2danalysis.html")
 mitch_plots(res,outfile="2danalysis.pdf")
 ```
 The results of the 2D analysis will be found in the HTML and PDF files generated here.
 
+In the report, we can see that there is a subtle anti-correlation between the two
+contrasts. 
+
+With respect to pathways, it appears that there is a reduction in RNA processing /
+translation in both contrasts, but more striking in the 3d6 contrast.
+
+There are several metabolic pathways that were reduced in Abeta and increased in the 
+3D6 contrast including:
+
+* Pyruvate metabolism and TCA cycle 
+
+* PI3K:FGFR2/4 cascade 
+
+* Carnitine metabolism
+
+Biotin transport, BCAA metabolism were increased in 3D6 but unchanged in Abeta.
+
+Notch1 signaling was downregulated in both contrasts.
+
 # My session info
 This helps for reproducibility.
 
-``{r,sessioninfo}
+```{r,sessioninfo}
 sessionInfo()
 ```
