@@ -231,6 +231,21 @@ Biotin transport, BCAA metabolism were increased in 3D6 but unchanged in Abeta.
 
 Notch1 signaling was downregulated in both contrasts.
 
+## Edit
+
+On 3rd June 2020 I looked at anadditional list of gene sets on request from Sean.
+
+```{r,mitch2,message=FALSE,results=FALSE}
+genesets2<-gmt_import("gsets/targeted_genesets.gmt")
+res<-mitch_calc(y,genesets2,priority="effect",cores=8)
+unlink("2danalysis2.html")
+mitch_report(res,outfile="2danalysis2.html")
+mitch_plots(res,outfile="2danalysis2.pdf")
+```
+
+targeted_genesets.gmt
+
+
 # My session info
 This helps for reproducibility.
 
