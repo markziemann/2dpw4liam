@@ -39,10 +39,10 @@ options(bitmapType="cairo")
 Because R disallows object names starting with numerals I will call it "d36".
 
 ```{r,load_data}
-ab <- read.table("provided/allSalmonQuant_Scr_vs_Abeta.csv",row.names=1,
+ab <- read.table("data/allSalmonQuant_Scr_vs_Abeta.csv",row.names=1,
     sep=",",header=TRUE)
 
-d36 <- read.table("provided/3D6_study_gene_counts.csv",row.names=1,
+d36 <- read.table("data/3D6_study_gene_counts.csv",row.names=1,
     sep=",",header=TRUE)
 
 ```

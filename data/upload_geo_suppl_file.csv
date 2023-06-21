@@ -1,0 +1,12 @@
+
+ab <- read.csv("allSalmonQuant_Scr_vs_Abeta.csv",row.names=1)
+colnames(ab) <- gsub("\\.","_",colnames(ab))
+
+d <- read.csv("3D6_study_gene_counts.csv", row.names=1)
+colnames(d) <- paste( sapply(strsplit(colnames(d),"_"),"[[",1) , sapply(strsplit(colnames(d),"_"),"[[",2) , sep="_")
+
+abd <- merge(ab,d,by=0)
+rownames(abd)  <- abd$Row.names
+abd$Row.names=NULL
+head(abd)
+write.csv(abd,file="Hall_Ziemann_counts.csv")
